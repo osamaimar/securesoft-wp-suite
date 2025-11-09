@@ -1,0 +1,85 @@
+# Docs directory
+Docs/
+
+# WordPress core files (if not version controlled)
+# Uncomment if you want to ignore WordPress core
+# /wp-admin/
+# /wp-includes/
+# /wp-*.php
+# /xmlrpc.php
+# /readme.html
+# /license.txt
+
+# WordPress configuration
+wp-config.php
+wp-config-sample.php
+
+# WordPress uploads
+wp-content/uploads/
+wp-content/upgrade/
+
+# WordPress cache
+wp-content/cache/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
+
+# WordPress debug log
+wp-content/debug.log
+
+# WordPress backups
+*.sql
+*.sql.gz
+*.sql.bz2
+
+# Plugin and theme development
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Composer
+vendor/
+composer.lock
+
+# Build files
+dist/
+build/
+*.min.js
+*.min.css
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Xdebug
+local-xdebuginfo.php
+
