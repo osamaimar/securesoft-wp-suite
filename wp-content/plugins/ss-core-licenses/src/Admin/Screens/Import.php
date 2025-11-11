@@ -69,21 +69,157 @@ class Import {
 			$products = wc_get_products( array( 'limit' => -1 ) );
 		}
 
-		// Show success message if import was successful.
+		// Show import report if available.
 		if ( isset( $_GET['imported'] ) && $_GET['imported'] == '1' ) {
-			$count = isset( $_GET['count'] ) ? intval( $_GET['count'] ) : 0;
+			$imported_count = isset( $_GET['count'] ) ? intval( $_GET['count'] ) : 0;
+			$failed_count = isset( $_GET['failed'] ) ? intval( $_GET['failed'] ) : 0;
+			$total_count = isset( $_GET['total'] ) ? intval( $_GET['total'] ) : 0;
+			$duplicates_count = isset( $_GET['duplicates'] ) ? intval( $_GET['duplicates'] ) : 0;
+			
+			// Get duplicates data from transient (stored temporarily).
+			$duplicates_data = get_transient( 'ss_import_duplicates_' . get_current_user_id() );
+			$errors_data = get_transient( 'ss_import_errors_' . get_current_user_id() );
+			
+			if ( false === $duplicates_data ) {
+				$duplicates_data = array();
+			}
+			if ( false === $errors_data ) {
+				$errors_data = array();
+			}
+			
 			?>
-			<div class="notice notice-success is-dismissible">
+			<div class="notice notice-<?php echo $failed_count > 0 ? 'warning' : 'success'; ?> is-dismissible">
 				<p>
-					<?php
-					printf(
-						// translators: %d: number of imported licenses.
-						esc_html( _n( '%d license imported successfully.', '%d licenses imported successfully.', $count, 'ss-core-licenses' ) ),
-						$count
-					);
-					?>
+					<strong><?php esc_html_e( 'Import Report', 'ss-core-licenses' ); ?></strong>
 				</p>
+				<ul>
+					<li>
+						<?php
+						printf(
+							// translators: %1$d: imported count, %2$d: total count.
+							esc_html__( 'Total rows processed: %1$d', 'ss-core-licenses' ),
+							$total_count
+						);
+						?>
+					</li>
+					<li>
+						<strong>
+							<?php
+							printf(
+								// translators: %1$d: imported count.
+								esc_html( _n( '%1$d license imported successfully.', '%1$d licenses imported successfully.', $imported_count, 'ss-core-licenses' ) ),
+								$imported_count
+							);
+							?>
+						</strong>
+					</li>
+					<?php if ( $failed_count > 0 ) : ?>
+						<li>
+							<strong>
+								<?php
+								printf(
+									// translators: %1$d: failed count.
+									esc_html( _n( '%1$d license failed to import.', '%1$d licenses failed to import.', $failed_count, 'ss-core-licenses' ) ),
+									$failed_count
+								);
+								?>
+							</strong>
+						</li>
+					<?php endif; ?>
+					<?php if ( $duplicates_count > 0 ) : ?>
+						<li>
+							<strong>
+								<?php
+								printf(
+									// translators: %1$d: duplicates count.
+									esc_html( _n( '%1$d duplicate license found.', '%1$d duplicate licenses found.', $duplicates_count, 'ss-core-licenses' ) ),
+									$duplicates_count
+								);
+								?>
+							</strong>
+						</li>
+					<?php endif; ?>
+				</ul>
 			</div>
+
+			<?php if ( ! empty( $duplicates_data ) ) : ?>
+				<div class="notice notice-warning">
+					<h3><?php esc_html_e( 'Duplicate Licenses', 'ss-core-licenses' ); ?></h3>
+					<p class="description"><?php esc_html_e( 'The following licenses were skipped because they already exist in the system:', 'ss-core-licenses' ); ?></p>
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Row', 'ss-core-licenses' ); ?></th>
+								<th><?php esc_html_e( 'License Code', 'ss-core-licenses' ); ?></th>
+								<th><?php esc_html_e( 'Existing License ID', 'ss-core-licenses' ); ?></th>
+								<th><?php esc_html_e( 'Existing Status', 'ss-core-licenses' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $duplicates_data as $duplicate ) : ?>
+								<tr>
+									<td><?php echo esc_html( $duplicate['row'] ); ?></td>
+									<td><code><?php echo esc_html( $duplicate['code'] ); ?></code></td>
+									<td><?php echo esc_html( $duplicate['existing_id'] ); ?></td>
+									<td>
+										<strong><?php echo esc_html( ucfirst( $duplicate['existing_status'] ) ); ?></strong>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( ! empty( $errors_data ) ) : ?>
+				<div class="notice notice-error">
+					<h3><?php esc_html_e( 'Import Errors', 'ss-core-licenses' ); ?></h3>
+					<p class="description"><?php esc_html_e( 'The following rows failed to import:', 'ss-core-licenses' ); ?></p>
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Row', 'ss-core-licenses' ); ?></th>
+								<th><?php esc_html_e( 'License Code', 'ss-core-licenses' ); ?></th>
+								<th><?php esc_html_e( 'Error Reason', 'ss-core-licenses' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $errors_data as $error ) : ?>
+								<tr>
+									<td><?php echo esc_html( $error['row'] ); ?></td>
+									<td><code><?php echo esc_html( $error['code'] ?: '—' ); ?></code></td>
+									<td><?php echo esc_html( $error['reason'] ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+			<?php endif; ?>
+			<?php
+			
+			// Clean up transients.
+			delete_transient( 'ss_import_duplicates_' . get_current_user_id() );
+			delete_transient( 'ss_import_errors_' . get_current_user_id() );
+			
+			// Add JavaScript to remove query parameters from URL after page load.
+			?>
+			<script type="text/javascript">
+			(function() {
+				if ( window.history && window.history.replaceState ) {
+					var url = new URL( window.location.href );
+					if ( url.searchParams.has( 'imported' ) || url.searchParams.has( 'count' ) || url.searchParams.has( 'failed' ) || url.searchParams.has( 'total' ) || url.searchParams.has( 'duplicates' ) ) {
+						// Remove import-related parameters.
+						url.searchParams.delete( 'imported' );
+						url.searchParams.delete( 'count' );
+						url.searchParams.delete( 'failed' );
+						url.searchParams.delete( 'total' );
+						url.searchParams.delete( 'duplicates' );
+						// Update URL without reloading page.
+						window.history.replaceState( {}, '', url.toString() );
+					}
+				}
+			})();
+			</script>
 			<?php
 		}
 
@@ -244,7 +380,27 @@ class Import {
 		$result = $importer->import_file( $file, $product_id, $provider_ref_column );
 
 		if ( $result['success'] ) {
-			wp_safe_redirect( admin_url( 'admin.php?page=securesoft-import&imported=1&count=' . $result['count'] ) );
+			// Store duplicates and errors in transients for display.
+			if ( ! empty( $result['duplicates'] ) ) {
+				set_transient( 'ss_import_duplicates_' . get_current_user_id(), $result['duplicates'], 300 ); // 5 minutes.
+			}
+			if ( ! empty( $result['errors'] ) ) {
+				set_transient( 'ss_import_errors_' . get_current_user_id(), $result['errors'], 300 ); // 5 minutes.
+			}
+			
+			$redirect_url = add_query_arg(
+				array(
+					'page' => 'securesoft-import',
+					'imported' => '1',
+					'count' => $result['count'],
+					'failed' => $result['failed'],
+					'total' => $result['total'],
+					'duplicates' => count( $result['duplicates'] ),
+				),
+				admin_url( 'admin.php' )
+			);
+			
+			wp_safe_redirect( $redirect_url );
 			exit;
 		} else {
 			wp_die( esc_html( $result['message'] ) );

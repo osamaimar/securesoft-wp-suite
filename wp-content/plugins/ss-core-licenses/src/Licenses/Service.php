@@ -138,6 +138,31 @@ class Service {
 	}
 
 	/**
+	 * Check if license code already exists.
+	 *
+	 * @param string $code License code (plaintext).
+	 * @param int    $product_id Optional product ID to check within.
+	 * @return array|null Existing license data or null if not found.
+	 */
+	public function license_exists( $code, $product_id = null ) {
+		// Ensure encryption keys are initialized.
+		$this->encryption->initialize_keys();
+
+		// Get all licenses (or for specific product).
+		$licenses = $this->repository->get_all( $product_id );
+
+		// Check each license by decrypting and comparing.
+		foreach ( $licenses as $license ) {
+			$decrypted = $this->encryption->decrypt( $license['code_enc'] );
+			if ( $decrypted === $code ) {
+				return $license;
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * Reserve license for order.
 	 *
 	 * @param int $product_id Product ID.

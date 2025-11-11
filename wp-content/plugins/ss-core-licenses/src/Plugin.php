@@ -73,6 +73,10 @@ class Plugin {
 		// Initialize on plugins_loaded with high priority to ensure WooCommerce is loaded.
 		add_action( 'plugins_loaded', array( $this, 'init' ), 25 );
 		add_action( 'init', array( $this, 'load_textdomain' ) );
+		// Ensure database structure is verified on admin pages.
+		if ( is_admin() ) {
+			add_action( 'admin_init', array( $this, 'verify_database_tables' ), 1 );
+		}
 	}
 
 	/**
@@ -151,7 +155,7 @@ class Plugin {
 	/**
 	 * Verify database tables exist and have correct structure.
 	 */
-	private function verify_database_tables() {
+	public function verify_database_tables() {
 		global $wpdb;
 
 		$tables = array(
@@ -181,13 +185,58 @@ class Plugin {
 				$column_names = wp_list_pluck( $columns, 'Field' );
 			}
 			
+			// Check and add actor_user_id column if missing.
 			if ( ! in_array( 'actor_user_id', $column_names, true ) ) {
-				// Add missing column.
 				$wpdb->query( "ALTER TABLE {$audit_table} ADD COLUMN actor_user_id bigint(20) UNSIGNED NOT NULL DEFAULT 0 AFTER id" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				// Check if index exists before adding.
 				$indexes = $wpdb->get_results( "SHOW INDEXES FROM {$audit_table} WHERE Key_name = 'actor_user_id'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				if ( empty( $indexes ) ) {
 					$wpdb->query( "ALTER TABLE {$audit_table} ADD INDEX actor_user_id (actor_user_id)" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				}
+			}
+			
+			// Check and add entity_type column if missing.
+			if ( ! in_array( 'entity_type', $column_names, true ) ) {
+				$wpdb->query( "ALTER TABLE {$audit_table} ADD COLUMN entity_type varchar(255) NOT NULL DEFAULT '' AFTER actor_user_id" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				// Check if index exists before adding.
+				$indexes = $wpdb->get_results( "SHOW INDEXES FROM {$audit_table} WHERE Key_name = 'entity_type'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				if ( empty( $indexes ) ) {
+					$wpdb->query( "ALTER TABLE {$audit_table} ADD INDEX entity_type (entity_type)" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				}
+			}
+			
+			// Check and add entity_id column if missing.
+			if ( ! in_array( 'entity_id', $column_names, true ) ) {
+				$wpdb->query( "ALTER TABLE {$audit_table} ADD COLUMN entity_id bigint(20) UNSIGNED DEFAULT NULL AFTER entity_type" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				// Check if index exists before adding.
+				$indexes = $wpdb->get_results( "SHOW INDEXES FROM {$audit_table} WHERE Key_name = 'entity_id'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				if ( empty( $indexes ) ) {
+					$wpdb->query( "ALTER TABLE {$audit_table} ADD INDEX entity_id (entity_id)" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				}
+			}
+			
+			// Check and add ip column if missing.
+			if ( ! in_array( 'ip', $column_names, true ) ) {
+				$wpdb->query( "ALTER TABLE {$audit_table} ADD COLUMN ip varchar(255) DEFAULT NULL AFTER entity_id" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			}
+			
+			// Check and add user_agent column if missing.
+			if ( ! in_array( 'user_agent', $column_names, true ) ) {
+				$wpdb->query( "ALTER TABLE {$audit_table} ADD COLUMN user_agent varchar(255) DEFAULT NULL AFTER ip" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			}
+			
+			// Check and add meta column if missing.
+			if ( ! in_array( 'meta', $column_names, true ) ) {
+				$wpdb->query( "ALTER TABLE {$audit_table} ADD COLUMN meta longtext DEFAULT NULL AFTER user_agent" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			}
+			
+			// Check and add created_at column if missing.
+			if ( ! in_array( 'created_at', $column_names, true ) ) {
+				$wpdb->query( "ALTER TABLE {$audit_table} ADD COLUMN created_at datetime NOT NULL AFTER meta" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				// Check if index exists before adding.
+				$indexes = $wpdb->get_results( "SHOW INDEXES FROM {$audit_table} WHERE Key_name = 'created_at'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				if ( empty( $indexes ) ) {
+					$wpdb->query( "ALTER TABLE {$audit_table} ADD INDEX created_at (created_at)" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 				}
 			}
 		}

@@ -75,8 +75,11 @@ class Importer {
 		// Import rows.
 		$imported = 0;
 		$failed = 0;
+		$duplicates = array();
+		$errors = array();
+		$total_rows = count( $rows );
 
-		foreach ( $rows as $row ) {
+		foreach ( $rows as $row_index => $row ) {
 			// Filter row data.
 			$row = apply_filters( 'ss/licenses/import/row', $row );
 
@@ -84,6 +87,24 @@ class Importer {
 			$code = $this->extract_code( $row );
 
 			if ( empty( $code ) ) {
+				$failed++;
+				$errors[] = array(
+					'row' => $row_index + 1,
+					'code' => '',
+					'reason' => __( 'Empty license code', 'ss-core-licenses' ),
+				);
+				continue;
+			}
+
+			// Check for duplicates.
+			$existing = $this->license_service->license_exists( $code, $product_id );
+			if ( $existing ) {
+				$duplicates[] = array(
+					'row' => $row_index + 1,
+					'code' => $code,
+					'existing_id' => $existing['id'],
+					'existing_status' => $existing['status'],
+				);
 				$failed++;
 				continue;
 			}
@@ -109,6 +130,11 @@ class Importer {
 				$imported++;
 			} else {
 				$failed++;
+				$errors[] = array(
+					'row' => $row_index + 1,
+					'code' => $code,
+					'reason' => __( 'Failed to create license', 'ss-core-licenses' ),
+				);
 			}
 		}
 
@@ -122,6 +148,7 @@ class Importer {
 				'product_id' => $product_id,
 				'imported' => $imported,
 				'failed' => $failed,
+				'duplicates' => count( $duplicates ),
 				'file' => $file_name,
 			)
 		);
@@ -130,6 +157,9 @@ class Importer {
 			'success' => true,
 			'count' => $imported,
 			'failed' => $failed,
+			'duplicates' => $duplicates,
+			'errors' => $errors,
+			'total' => $total_rows,
 			'message' => sprintf(
 				// translators: %d: number of imported licenses.
 				_n( '%d license imported successfully.', '%d licenses imported successfully.', $imported, 'ss-core-licenses' ),

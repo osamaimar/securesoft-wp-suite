@@ -119,32 +119,49 @@ class Logger {
 
 		$where_clause = implode( ' AND ', $where );
 
-		$orderby = sanitize_sql_orderby( $args['orderby'] . ' ' . $args['order'] );
-		if ( ! $orderby ) {
-			$orderby = 'created_at DESC';
+		// Validate and sanitize orderby field.
+		$allowed_orderby = array( 'id', 'actor_user_id', 'action', 'entity_type', 'entity_id', 'ip', 'created_at' );
+		$orderby_field = strtolower( $args['orderby'] );
+		$order_direction = strtoupper( $args['order'] ) === 'ASC' ? 'ASC' : 'DESC';
+
+		if ( ! in_array( $orderby_field, $allowed_orderby, true ) ) {
+			$orderby_field = 'created_at';
 		}
+
+		// Build query - ORDER BY cannot be parameterized, so we validate the field.
+		$orderby_clause = "{$orderby_field} {$order_direction}";
 
 		// Build query - handle limit -1 (no limit) case.
 		if ( $args['limit'] > 0 ) {
-			$query = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$orderby} LIMIT %d OFFSET %d";
-			$values[] = $args['limit'];
-			$values[] = $args['offset'];
-			$logs = $wpdb->get_results(
-				$wpdb->prepare( $query, $values ),
-				ARRAY_A
-			);
+			if ( ! empty( $values ) ) {
+				$query = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$orderby_clause} LIMIT %d OFFSET %d";
+				$values[] = $args['limit'];
+				$values[] = $args['offset'];
+				$logs = $wpdb->get_results(
+					$wpdb->prepare( $query, $values ),
+					ARRAY_A
+				);
+			} else {
+				// No WHERE conditions, but we have LIMIT.
+				$query = $wpdb->prepare(
+					"SELECT * FROM {$table} ORDER BY {$orderby_clause} LIMIT %d OFFSET %d",
+					$args['limit'],
+					$args['offset']
+				);
+				$logs = $wpdb->get_results( $query, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			}
 		} else {
 			// No limit - get all results, but still use prepare for WHERE clause.
 			if ( ! empty( $values ) ) {
-				$query = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$orderby}";
+				$query = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$orderby_clause}";
 				$logs = $wpdb->get_results(
 					$wpdb->prepare( $query, $values ),
 					ARRAY_A
 				);
 			} else {
 				// No WHERE conditions, safe to query directly.
-				$query = "SELECT * FROM {$table} ORDER BY {$orderby}";
-				$logs = $wpdb->get_results( $query, ARRAY_A );
+				$query = "SELECT * FROM {$table} ORDER BY {$orderby_clause}";
+				$logs = $wpdb->get_results( $query, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 			}
 		}
 

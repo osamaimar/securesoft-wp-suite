@@ -225,6 +225,39 @@ class Repository {
 	}
 
 	/**
+	 * Get all licenses.
+	 *
+	 * @param int|null $product_id Optional product ID to filter by.
+	 * @return array Array of licenses.
+	 */
+	public function get_all( $product_id = null ) {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'ss_licenses';
+
+		if ( $product_id ) {
+			$licenses = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT * FROM {$table} WHERE product_id = %d",
+					$product_id
+				),
+				ARRAY_A
+			);
+		} else {
+			$licenses = $wpdb->get_results(
+				"SELECT * FROM {$table}",
+				ARRAY_A
+			);
+		}
+
+		foreach ( $licenses as &$license ) {
+			$license['meta'] = $license['meta'] ? json_decode( $license['meta'], true ) : array();
+		}
+
+		return $licenses;
+	}
+
+	/**
 	 * Count licenses by status.
 	 *
 	 * @param int    $product_id Product ID.
@@ -262,6 +295,9 @@ class Repository {
 			'product_id' => null,
 			'status' => null,
 			'search' => null,
+			'provider_ref' => null,
+			'date_from' => null,
+			'date_to' => null,
 			'limit' => 100,
 			'offset' => 0,
 			'orderby' => 'created_at',
@@ -287,6 +323,21 @@ class Repository {
 			$where[] = '(provider_ref LIKE %s OR id = %d)';
 			$values[] = '%' . $wpdb->esc_like( $args['search'] ) . '%';
 			$values[] = (int) $args['search'];
+		}
+
+		if ( $args['provider_ref'] ) {
+			$where[] = 'provider_ref LIKE %s';
+			$values[] = '%' . $wpdb->esc_like( $args['provider_ref'] ) . '%';
+		}
+
+		if ( $args['date_from'] ) {
+			$where[] = 'created_at >= %s';
+			$values[] = $args['date_from'] . ' 00:00:00';
+		}
+
+		if ( $args['date_to'] ) {
+			$where[] = 'created_at <= %s';
+			$values[] = $args['date_to'] . ' 23:59:59';
 		}
 
 		$where_clause = implode( ' AND ', $where );

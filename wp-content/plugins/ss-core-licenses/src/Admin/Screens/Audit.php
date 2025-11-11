@@ -31,6 +31,8 @@ class Audit {
 
 		add_action( 'admin_menu', array( $this, 'add_menu_page' ) );
 		add_action( 'admin_post_ss_export_audit', array( $this, 'handle_export' ) );
+		add_action( 'admin_post_ss_save_audit_filter', array( $this, 'handle_save_filter' ) );
+		add_action( 'admin_post_ss_delete_audit_filter', array( $this, 'handle_delete_filter' ) );
 	}
 
 	/**
@@ -51,14 +53,38 @@ class Audit {
 	 * Render page.
 	 */
 	public function render_page() {
-		// Get filters.
+		// Handle saved filter.
 		$actor_user_id = isset( $_GET['actor_user_id'] ) ? intval( $_GET['actor_user_id'] ) : 0;
 		$action = isset( $_GET['action'] ) ? sanitize_text_field( $_GET['action'] ) : '';
 		$entity_type = isset( $_GET['entity_type'] ) ? sanitize_text_field( $_GET['entity_type'] ) : '';
 		$date_from = isset( $_GET['date_from'] ) ? sanitize_text_field( $_GET['date_from'] ) : '';
 		$date_to = isset( $_GET['date_to'] ) ? sanitize_text_field( $_GET['date_to'] ) : '';
+		
+		if ( isset( $_GET['filter_id'] ) ) {
+			$filter_id = intval( $_GET['filter_id'] );
+			$saved_filters = get_user_meta( get_current_user_id(), 'ss_saved_audit_filters', true );
+			if ( is_array( $saved_filters ) && isset( $saved_filters[ $filter_id ] ) ) {
+				$filter_data = $saved_filters[ $filter_id ];
+				$actor_user_id = isset( $filter_data['actor_user_id'] ) ? intval( $filter_data['actor_user_id'] ) : 0;
+				$action = isset( $filter_data['action'] ) ? sanitize_text_field( $filter_data['action'] ) : '';
+				$entity_type = isset( $filter_data['entity_type'] ) ? sanitize_text_field( $filter_data['entity_type'] ) : '';
+				$date_from = isset( $filter_data['date_from'] ) ? sanitize_text_field( $filter_data['date_from'] ) : '';
+				$date_to = isset( $filter_data['date_to'] ) ? sanitize_text_field( $filter_data['date_to'] ) : '';
+			}
+		}
+
 		$paged = isset( $_GET['paged'] ) ? intval( $_GET['paged'] ) : 1;
 		$per_page = 50;
+		
+		// Get sorting parameters.
+		$orderby = isset( $_GET['orderby'] ) ? sanitize_text_field( $_GET['orderby'] ) : 'created_at';
+		$order = isset( $_GET['order'] ) && 'asc' === strtolower( $_GET['order'] ) ? 'ASC' : 'DESC';
+
+		// Get saved filters.
+		$saved_filters = get_user_meta( get_current_user_id(), 'ss_saved_audit_filters', true );
+		if ( ! is_array( $saved_filters ) ) {
+			$saved_filters = array();
+		}
 
 		// Get logs.
 		$logs = $this->audit_logger->get_logs(
@@ -70,6 +96,8 @@ class Audit {
 				'date_to' => $date_to,
 				'limit' => $per_page,
 				'offset' => ( $paged - 1 ) * $per_page,
+				'orderby' => $orderby,
+				'order' => $order,
 			)
 		);
 
@@ -88,14 +116,39 @@ class Audit {
 		// Get users for filter.
 		$users = get_users( array( 'role__in' => array( 'administrator', 'shop_manager' ) ) );
 
+		// Show success messages.
+		if ( isset( $_GET['filter_saved'] ) && $_GET['filter_saved'] == 1 ) {
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Filter saved successfully.', 'ss-core-licenses' ) . '</p></div>';
+		}
+		if ( isset( $_GET['filter_deleted'] ) && $_GET['filter_deleted'] == 1 ) {
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Filter deleted successfully.', 'ss-core-licenses' ) . '</p></div>';
+		}
+
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Audit Log', 'ss-core-licenses' ); ?></h1>
 
 			<form method="get" action="">
 				<input type="hidden" name="page" value="securesoft-audit">
+				<?php if ( $orderby && 'created_at' !== $orderby ) : ?>
+					<input type="hidden" name="orderby" value="<?php echo esc_attr( $orderby ); ?>">
+				<?php endif; ?>
+				<?php if ( $order && 'DESC' !== $order ) : ?>
+					<input type="hidden" name="order" value="<?php echo esc_attr( strtolower( $order ) ); ?>">
+				<?php endif; ?>
 				<div class="tablenav top">
 					<div class="alignleft actions">
+						<?php if ( ! empty( $saved_filters ) ) : ?>
+							<select name="saved_filter" id="ss-saved-audit-filter" onchange="if(this.value) { window.location.href = '<?php echo esc_url( admin_url( 'admin.php?page=securesoft-audit' ) ); ?>&filter_id=' + this.value; }">
+								<option value=""><?php esc_html_e( 'Saved Filters...', 'ss-core-licenses' ); ?></option>
+								<?php foreach ( $saved_filters as $id => $filter ) : ?>
+									<option value="<?php echo esc_attr( $id ); ?>">
+										<?php echo esc_html( $filter['name'] ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						<?php endif; ?>
+
 						<select name="actor_user_id">
 							<option value=""><?php esc_html_e( 'All Users', 'ss-core-licenses' ); ?></option>
 							<?php foreach ( $users as $user ) : ?>
@@ -108,9 +161,13 @@ class Audit {
 						<select name="action">
 							<option value=""><?php esc_html_e( 'All Actions', 'ss-core-licenses' ); ?></option>
 							<option value="license_imported" <?php selected( $action, 'license_imported' ); ?>><?php esc_html_e( 'License Imported', 'ss-core-licenses' ); ?></option>
+							<option value="license_added_manually" <?php selected( $action, 'license_added_manually' ); ?>><?php esc_html_e( 'License Added Manually', 'ss-core-licenses' ); ?></option>
 							<option value="license_reserved" <?php selected( $action, 'license_reserved' ); ?>><?php esc_html_e( 'License Reserved', 'ss-core-licenses' ); ?></option>
 							<option value="license_assigned" <?php selected( $action, 'license_assigned' ); ?>><?php esc_html_e( 'License Assigned', 'ss-core-licenses' ); ?></option>
 							<option value="license_revoked" <?php selected( $action, 'license_revoked' ); ?>><?php esc_html_e( 'License Revoked', 'ss-core-licenses' ); ?></option>
+							<option value="license_released" <?php selected( $action, 'license_released' ); ?>><?php esc_html_e( 'License Released', 'ss-core-licenses' ); ?></option>
+							<option value="pool_recounted" <?php selected( $action, 'pool_recounted' ); ?>><?php esc_html_e( 'Pool Recounted', 'ss-core-licenses' ); ?></option>
+							<option value="key_generated" <?php selected( $action, 'key_generated' ); ?>><?php esc_html_e( 'Key Generated', 'ss-core-licenses' ); ?></option>
 							<option value="keys_rotated" <?php selected( $action, 'keys_rotated' ); ?>><?php esc_html_e( 'Keys Rotated', 'ss-core-licenses' ); ?></option>
 						</select>
 
@@ -125,11 +182,16 @@ class Audit {
 						<input type="date" name="date_to" value="<?php echo esc_attr( $date_to ); ?>" placeholder="<?php esc_attr_e( 'To Date', 'ss-core-licenses' ); ?>">
 
 						<input type="submit" class="button" value="<?php esc_attr_e( 'Filter', 'ss-core-licenses' ); ?>">
+						
+						<?php if ( $actor_user_id > 0 || $action || $entity_type || $date_from || $date_to ) : ?>
+							<a href="<?php echo esc_url( admin_url( 'admin.php?page=securesoft-audit' ) ); ?>" class="button"><?php esc_html_e( 'Clear', 'ss-core-licenses' ); ?></a>
+							<button type="button" class="button" onclick="document.getElementById('ss-save-audit-filter-modal').style.display='block';"><?php esc_html_e( 'Save Filter', 'ss-core-licenses' ); ?></button>
+						<?php endif; ?>
 					</div>
 
-					<div class="alignright">
-						<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=ss_export_audit' ), 'ss_export_audit' ) ); ?>" class="button">
-							<?php esc_html_e( 'Export CSV', 'ss-core-licenses' ); ?>
+					<div class="alignright actions">
+						<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=ss_export_audit' . ( $actor_user_id ? '&actor_user_id=' . $actor_user_id : '' ) . ( $action ? '&action=' . urlencode( $action ) : '' ) . ( $entity_type ? '&entity_type=' . urlencode( $entity_type ) : '' ) . ( $date_from ? '&date_from=' . urlencode( $date_from ) : '' ) . ( $date_to ? '&date_to=' . urlencode( $date_to ) : '' ) ), 'ss_export_audit' ) ); ?>" class="button">
+							<?php esc_html_e( 'Export', 'ss-core-licenses' ); ?>
 						</a>
 					</div>
 				</div>
@@ -138,12 +200,12 @@ class Audit {
 			<table class="wp-list-table widefat fixed striped">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'Date', 'ss-core-licenses' ); ?></th>
-						<th><?php esc_html_e( 'User', 'ss-core-licenses' ); ?></th>
-						<th><?php esc_html_e( 'Action', 'ss-core-licenses' ); ?></th>
-						<th><?php esc_html_e( 'Entity', 'ss-core-licenses' ); ?></th>
-						<th><?php esc_html_e( 'IP Address', 'ss-core-licenses' ); ?></th>
-						<th><?php esc_html_e( 'Details', 'ss-core-licenses' ); ?></th>
+						<?php echo $this->get_column_header( 'created_at', __( 'Date', 'ss-core-licenses' ), $orderby, $order ); ?>
+						<th class="manage-column"><?php esc_html_e( 'Details', 'ss-core-licenses' ); ?></th>
+						<?php echo $this->get_column_header( 'actor_user_id', __( 'User', 'ss-core-licenses' ), $orderby, $order ); ?>
+						<?php echo $this->get_column_header( 'action', __( 'Action', 'ss-core-licenses' ), $orderby, $order ); ?>
+						<?php echo $this->get_column_header( 'entity_type', __( 'Entity', 'ss-core-licenses' ), $orderby, $order ); ?>
+						<?php echo $this->get_column_header( 'ip', __( 'IP Address', 'ss-core-licenses' ), $orderby, $order ); ?>
 					</tr>
 				</thead>
 				<tbody>
@@ -158,6 +220,16 @@ class Audit {
 							?>
 							<tr>
 								<td><?php echo esc_html( $log['created_at'] ); ?></td>
+								<td>
+									<?php if ( ! empty( $log['meta'] ) ) : ?>
+										<details>
+											<summary><?php esc_html_e( 'View Details', 'ss-core-licenses' ); ?></summary>
+											<pre class="code"><?php echo esc_html( wp_json_encode( $log['meta'], JSON_PRETTY_PRINT ) ); ?></pre>
+										</details>
+									<?php else : ?>
+										—
+									<?php endif; ?>
+								</td>
 								<td><?php echo $user ? esc_html( $user->display_name ) : '—'; ?></td>
 								<td><?php echo esc_html( $log['action'] ); ?></td>
 								<td>
@@ -169,16 +241,6 @@ class Audit {
 									?>
 								</td>
 								<td><?php echo esc_html( $log['ip'] ); ?></td>
-								<td>
-									<?php if ( ! empty( $log['meta'] ) ) : ?>
-										<details>
-											<summary><?php esc_html_e( 'View Details', 'ss-core-licenses' ); ?></summary>
-											<pre class="code"><?php echo esc_html( wp_json_encode( $log['meta'], JSON_PRETTY_PRINT ) ); ?></pre>
-										</details>
-									<?php else : ?>
-										—
-									<?php endif; ?>
-								</td>
 							</tr>
 						<?php endforeach; ?>
 					<?php endif; ?>
@@ -189,9 +251,10 @@ class Audit {
 				<div class="tablenav bottom">
 					<div class="tablenav-pages">
 						<?php
+						$pagination_base = add_query_arg( array( 'paged' => '%#%', 'orderby' => $orderby, 'order' => strtolower( $order ) ), remove_query_arg( 'paged' ) );
 						$page_links = paginate_links(
 							array(
-								'base' => add_query_arg( 'paged', '%#%' ),
+								'base' => $pagination_base,
 								'format' => '',
 								'prev_text' => '&laquo;',
 								'next_text' => '&raquo;',
@@ -204,6 +267,29 @@ class Audit {
 					</div>
 				</div>
 			<?php endif; ?>
+
+			<!-- Save Filter Modal -->
+			<div id="ss-save-audit-filter-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:20px; border:1px solid #ccc; z-index:100000;">
+				<h2><?php esc_html_e( 'Save Filter', 'ss-core-licenses' ); ?></h2>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<?php wp_nonce_field( 'ss_save_audit_filter' ); ?>
+					<input type="hidden" name="action" value="ss_save_audit_filter">
+					<input type="hidden" name="actor_user_id" value="<?php echo esc_attr( $actor_user_id ); ?>">
+					<input type="hidden" name="action_filter" value="<?php echo esc_attr( $action ); ?>">
+					<input type="hidden" name="entity_type" value="<?php echo esc_attr( $entity_type ); ?>">
+					<input type="hidden" name="date_from" value="<?php echo esc_attr( $date_from ); ?>">
+					<input type="hidden" name="date_to" value="<?php echo esc_attr( $date_to ); ?>">
+					<p>
+						<label><?php esc_html_e( 'Filter Name:', 'ss-core-licenses' ); ?>
+							<input type="text" name="filter_name" required class="regular-text">
+						</label>
+					</p>
+					<p>
+						<?php submit_button( __( 'Save', 'ss-core-licenses' ), 'primary', 'submit', false ); ?>
+						<button type="button" class="button" onclick="document.getElementById('ss-save-audit-filter-modal').style.display='none';"><?php esc_html_e( 'Cancel', 'ss-core-licenses' ); ?></button>
+					</p>
+				</form>
+			</div>
 		</div>
 		<?php
 	}
@@ -218,15 +304,36 @@ class Audit {
 
 		check_admin_referer( 'ss_export_audit' );
 
-		// Get all logs.
-		$logs = $this->audit_logger->get_logs( array( 'limit' => -1 ) );
+		// Get filters from URL.
+		$actor_user_id = isset( $_GET['actor_user_id'] ) ? intval( $_GET['actor_user_id'] ) : 0;
+		$action = isset( $_GET['action'] ) ? sanitize_text_field( $_GET['action'] ) : '';
+		$entity_type = isset( $_GET['entity_type'] ) ? sanitize_text_field( $_GET['entity_type'] ) : '';
+		$date_from = isset( $_GET['date_from'] ) ? sanitize_text_field( $_GET['date_from'] ) : '';
+		$date_to = isset( $_GET['date_to'] ) ? sanitize_text_field( $_GET['date_to'] ) : '';
+
+		// Get filtered logs.
+		$logs = $this->audit_logger->get_logs(
+			array(
+				'actor_user_id' => $actor_user_id,
+				'action' => $action,
+				'entity_type' => $entity_type,
+				'date_from' => $date_from,
+				'date_to' => $date_to,
+				'limit' => -1,
+			)
+		);
 
 		// Generate CSV.
 		$filename = 'audit-log-' . date( 'Y-m-d' ) . '.csv';
-		header( 'Content-Type: text/csv' );
+		header( 'Content-Type: text/csv; charset=utf-8' );
 		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
 
 		$output = fopen( 'php://output', 'w' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_fopen
+
+		// Add UTF-8 BOM for Excel compatibility.
+		fprintf( $output, chr( 0xEF ) . chr( 0xBB ) . chr( 0xBF ) );
 
 		// Header.
 		fputcsv( $output, array( 'Date', 'User', 'Action', 'Entity Type', 'Entity ID', 'IP Address', 'Meta' ) );
@@ -250,6 +357,127 @@ class Audit {
 
 		fclose( $output ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_fclose
 		exit;
+	}
+
+	/**
+	 * Handle save filter.
+	 */
+	public function handle_save_filter() {
+		if ( ! current_user_can( 'ss_view_audit_log' ) ) {
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'ss-core-licenses' ) );
+		}
+
+		check_admin_referer( 'ss_save_audit_filter' );
+
+		$filter_name = isset( $_POST['filter_name'] ) ? sanitize_text_field( $_POST['filter_name'] ) : '';
+		$actor_user_id = isset( $_POST['actor_user_id'] ) ? intval( $_POST['actor_user_id'] ) : 0;
+		$action = isset( $_POST['action_filter'] ) ? sanitize_text_field( $_POST['action_filter'] ) : '';
+		$entity_type = isset( $_POST['entity_type'] ) ? sanitize_text_field( $_POST['entity_type'] ) : '';
+		$date_from = isset( $_POST['date_from'] ) ? sanitize_text_field( $_POST['date_from'] ) : '';
+		$date_to = isset( $_POST['date_to'] ) ? sanitize_text_field( $_POST['date_to'] ) : '';
+
+		if ( empty( $filter_name ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=securesoft-audit&error=1' ) );
+			exit;
+		}
+
+		$saved_filters = get_user_meta( get_current_user_id(), 'ss_saved_audit_filters', true );
+		if ( ! is_array( $saved_filters ) ) {
+			$saved_filters = array();
+		}
+
+		$filter_id = time();
+		$saved_filters[ $filter_id ] = array(
+			'name' => $filter_name,
+			'actor_user_id' => $actor_user_id,
+			'action' => $action,
+			'entity_type' => $entity_type,
+			'date_from' => $date_from,
+			'date_to' => $date_to,
+		);
+
+		update_user_meta( get_current_user_id(), 'ss_saved_audit_filters', $saved_filters );
+
+		wp_safe_redirect( admin_url( 'admin.php?page=securesoft-audit&filter_saved=1' ) );
+		exit;
+	}
+
+	/**
+	 * Handle delete filter.
+	 */
+	public function handle_delete_filter() {
+		if ( ! current_user_can( 'ss_view_audit_log' ) ) {
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'ss-core-licenses' ) );
+		}
+
+		check_admin_referer( 'ss_delete_audit_filter' );
+
+		$filter_id = isset( $_GET['filter_id'] ) ? intval( $_GET['filter_id'] ) : 0;
+
+		if ( $filter_id > 0 ) {
+			$saved_filters = get_user_meta( get_current_user_id(), 'ss_saved_audit_filters', true );
+			if ( is_array( $saved_filters ) && isset( $saved_filters[ $filter_id ] ) ) {
+				unset( $saved_filters[ $filter_id ] );
+				update_user_meta( get_current_user_id(), 'ss_saved_audit_filters', $saved_filters );
+			}
+		}
+
+		wp_safe_redirect( admin_url( 'admin.php?page=securesoft-audit&filter_deleted=1' ) );
+		exit;
+	}
+
+	/**
+	 * Get sortable column header.
+	 *
+	 * @param string $column_key Column key.
+	 * @param string $column_name Column display name.
+	 * @param string $current_orderby Current orderby parameter.
+	 * @param string $current_order Current order parameter.
+	 * @return string Column header HTML.
+	 */
+	private function get_column_header( $column_key, $column_name, $current_orderby, $current_order ) {
+		$current_url = set_url_scheme( 'http://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'] );
+		$current_url = remove_query_arg( array( 'paged', 'orderby', 'order' ), $current_url );
+
+		// Determine sort order.
+		if ( $current_orderby === $column_key ) {
+			$order = 'asc' === strtolower( $current_order ) ? 'desc' : 'asc';
+			$class = 'sorted ' . strtolower( $current_order );
+			$aria_sort = 'asc' === strtolower( $current_order ) ? ' aria-sort="ascending"' : ' aria-sort="descending"';
+		} else {
+			$order = 'asc';
+			$class = 'sortable asc';
+			$aria_sort = '';
+		}
+
+		$orderby = $column_key;
+		$url = add_query_arg( compact( 'orderby', 'order' ), $current_url );
+
+		// Build column header with WordPress default classes.
+		$header = sprintf(
+			'<th scope="col" class="manage-column column-%s %s"%s>',
+			esc_attr( $column_key ),
+			esc_attr( $class ),
+			$aria_sort
+		);
+
+		$header .= sprintf(
+			'<a href="%s">' .
+			'<span>%s</span>' .
+			'<span class="sorting-indicators">' .
+			'<span class="sorting-indicator asc" aria-hidden="true"></span>' .
+			'<span class="sorting-indicator desc" aria-hidden="true"></span>' .
+			'</span>' .
+			'<span class="screen-reader-text">%s</span>' .
+			'</a>',
+			esc_url( $url ),
+			esc_html( $column_name ),
+			esc_html__( 'Sort ascending.', 'ss-core-licenses' )
+		);
+
+		$header .= '</th>';
+
+		return $header;
 	}
 }
 

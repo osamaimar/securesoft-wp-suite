@@ -300,57 +300,57 @@ class Encryption {
 			$key = $this->get_key( $version );
 			if ( ! $key ) {
 				continue;
-			}
+		}
 
-			// Check if this is CBC mode (fallback).
-			if ( strpos( $ciphertext, 'cbc:' ) === 0 ) {
+		// Check if this is CBC mode (fallback).
+		if ( strpos( $ciphertext, 'cbc:' ) === 0 ) {
 				$cbc_ciphertext = substr( $ciphertext, 4 );
 				$data = base64_decode( $cbc_ciphertext, true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
-				if ( false === $data ) {
-					continue;
-				}
-				$iv = substr( $data, 0, 16 );
-				$hmac = substr( $data, 16, 32 );
-				$encrypted = substr( $data, 48 );
-				// Verify HMAC.
-				$calculated_hmac = hash_hmac( 'sha256', $encrypted, $key, true );
-				if ( ! hash_equals( $hmac, $calculated_hmac ) ) {
-					continue;
-				}
-				// Decrypt.
-				$plaintext = openssl_decrypt(
-					$encrypted,
-					'aes-256-cbc',
-					$key,
-					OPENSSL_RAW_DATA,
-					$iv
-				);
-				if ( false !== $plaintext ) {
-					return $plaintext;
-				}
-				continue;
-			}
-
-			// Decode base64.
-			$data = base64_decode( $ciphertext, true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
 			if ( false === $data ) {
-				continue;
+					continue;
 			}
-
-			// Extract IV, tag, and ciphertext.
-			$iv = substr( $data, 0, self::IV_LENGTH );
-			$tag = substr( $data, self::IV_LENGTH, self::TAG_LENGTH );
-			$encrypted = substr( $data, self::IV_LENGTH + self::TAG_LENGTH );
-
+			$iv = substr( $data, 0, 16 );
+			$hmac = substr( $data, 16, 32 );
+			$encrypted = substr( $data, 48 );
+			// Verify HMAC.
+			$calculated_hmac = hash_hmac( 'sha256', $encrypted, $key, true );
+			if ( ! hash_equals( $hmac, $calculated_hmac ) ) {
+					continue;
+			}
 			// Decrypt.
 			$plaintext = openssl_decrypt(
 				$encrypted,
-				self::ALGORITHM,
+				'aes-256-cbc',
 				$key,
 				OPENSSL_RAW_DATA,
-				$iv,
-				$tag
+				$iv
 			);
+				if ( false !== $plaintext ) {
+			return $plaintext;
+				}
+				continue;
+		}
+
+		// Decode base64.
+		$data = base64_decode( $ciphertext, true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
+		if ( false === $data ) {
+				continue;
+		}
+
+		// Extract IV, tag, and ciphertext.
+		$iv = substr( $data, 0, self::IV_LENGTH );
+		$tag = substr( $data, self::IV_LENGTH, self::TAG_LENGTH );
+		$encrypted = substr( $data, self::IV_LENGTH + self::TAG_LENGTH );
+
+		// Decrypt.
+		$plaintext = openssl_decrypt(
+			$encrypted,
+			self::ALGORITHM,
+			$key,
+			OPENSSL_RAW_DATA,
+			$iv,
+			$tag
+		);
 
 			if ( false !== $plaintext ) {
 				return $plaintext;

@@ -145,17 +145,33 @@ class Repository {
 	/**
 	 * Get all pools.
 	 *
+	 * @param array $args Query arguments.
 	 * @return array Array of pools.
 	 */
-	public function get_all() {
+	public function get_all( $args = array() ) {
 		global $wpdb;
 
 		$table = $wpdb->prefix . 'ss_license_pools';
 
-		$pools = $wpdb->get_results(
-			"SELECT * FROM {$table} ORDER BY updated_at DESC",
-			ARRAY_A
+		$defaults = array(
+			'orderby' => 'updated_at',
+			'order' => 'DESC',
 		);
+
+		$args = wp_parse_args( $args, $defaults );
+
+		// Validate and sanitize orderby field.
+		$allowed_orderby = array( 'id', 'product_id', 'qty_cached', 'created_at', 'updated_at' );
+		$orderby_field = strtolower( $args['orderby'] );
+		$order_direction = strtoupper( $args['order'] ) === 'ASC' ? 'ASC' : 'DESC';
+
+		if ( ! in_array( $orderby_field, $allowed_orderby, true ) ) {
+			$orderby_field = 'updated_at';
+		}
+
+		// Build query - ORDER BY cannot be parameterized, so we validate the field.
+		$query = "SELECT * FROM {$table} ORDER BY {$orderby_field} {$order_direction}";
+		$pools = $wpdb->get_results( $query, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 
 		foreach ( $pools as &$pool ) {
 			$pool['policy'] = $pool['policy'] ? json_decode( $pool['policy'], true ) : array();
