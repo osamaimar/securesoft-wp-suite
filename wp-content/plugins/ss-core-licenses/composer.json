@@ -1,0 +1,31 @@
+{
+	"name": "securesoft/ss-core-licenses",
+	"description": "Core plugin for SecureSoft license management, encryption, and WooCommerce integration.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"authors": [
+		{
+			"name": "SecureSoft",
+			"email": "info@securesoft.com"
+		}
+	],
+	"require": {
+		"php": ">=7.4"
+	},
+	"require-dev": {
+		"wp-coding-standards/wpcs": "^3.0",
+		"phpcompatibility/phpcompatibility-wp": "^2.1",
+		"squizlabs/php_codesniffer": "^3.7"
+	},
+	"scripts": {
+		"phpcs": "phpcs --standard=phpcs.xml .",
+		"phpcbf": "phpcbf --standard=phpcs.xml .",
+		"lint": "find . -type f -name '*.php' -exec php -l {} \\;"
+	},
+	"config": {
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	}
+}
+

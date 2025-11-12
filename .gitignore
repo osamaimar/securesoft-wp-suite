@@ -38,6 +38,9 @@ yarn-error.log
 package-lock.json
 yarn.lock
 
+# Temporary: exclude ss-roles-capabilities for CI/CD commit
+wp-content/plugins/ss-roles-capabilities/
+
 # IDE and editor files
 .vscode/
 .idea/

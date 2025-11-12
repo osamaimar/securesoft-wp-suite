@@ -135,12 +135,12 @@ class Logger {
 		if ( $args['limit'] > 0 ) {
 			if ( ! empty( $values ) ) {
 				$query = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY {$orderby_clause} LIMIT %d OFFSET %d";
-				$values[] = $args['limit'];
-				$values[] = $args['offset'];
-				$logs = $wpdb->get_results(
-					$wpdb->prepare( $query, $values ),
-					ARRAY_A
-				);
+			$values[] = $args['limit'];
+			$values[] = $args['offset'];
+			$logs = $wpdb->get_results(
+				$wpdb->prepare( $query, $values ),
+				ARRAY_A
+			);
 			} else {
 				// No WHERE conditions, but we have LIMIT.
 				$query = $wpdb->prepare(

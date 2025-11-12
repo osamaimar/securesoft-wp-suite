@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<ruleset name="SS Core Licenses">
+	<description>WordPress Coding Standards for SS Core Licenses Plugin</description>
+
+	<!-- What to scan -->
+	<file>./</file>
+
+	<!-- Exclude vendor and node_modules -->
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/node_modules/*</exclude-pattern>
+	<exclude-pattern>*/tests/*</exclude-pattern>
+	<exclude-pattern>*/dist/*</exclude-pattern>
+	<exclude-pattern>*/build/*</exclude-pattern>
+	<exclude-pattern>*.min.js</exclude-pattern>
+	<exclude-pattern>*.min.css</exclude-pattern>
+
+	<!-- How to scan -->
+	<!-- Usage instructions: https://github.com/squizlabs/PHP_CodeSniffer/wiki/Usage -->
+	<!-- Annotated ruleset: https://github.com/squizlabs/PHP_CodeSniffer/wiki/Annotated-ruleset.xml -->
+	<arg value="sp"/> <!-- Show sniff and progress -->
+	<arg name="basepath" value="./"/><!-- Strip the file paths down to the relevant bit -->
+	<arg name="colors"/>
+	<arg name="extensions" value="php"/>
+	<arg name="parallel" value="8"/><!-- Enables parallel processing when available for faster results. -->
+
+	<!-- Rules: Check PHP version compatibility -->
+	<!-- https://github.com/PHPCompatibility/PHPCompatibility#sniffing-your-code-for-compatibility-with-specific-php-versions -->
+	<config name="testVersion" value="7.4-"/>
+	<!-- https://github.com/PHPCompatibility/PHPCompatibilityWP#whitelisting-rules-which-are-not-compatible-with-wordpress -->
+	<rule ref="PHPCompatibilityWP"/>
+
+	<!-- Rules: WordPress Coding Standards -->
+	<!-- https://github.com/WordPress/WordPress-Coding-Standards -->
+	<!-- https://github.com/WordPress/WordPress-Coding-Standards/wiki/Customizable-sniff-properties -->
+	<config name="minimum_supported_wp_version" value="5.8"/>
+
+	<rule ref="WordPress">
+		<!-- Allow short array syntax -->
+		<exclude name="Generic.Arrays.DisallowShortArraySyntax"/>
+		
+		<!-- Allow short ternary operator -->
+		<exclude name="WordPress.PHP.DisallowShortTernary"/>
+		
+		<!-- Allow Yoda conditions -->
+		<exclude name="WordPress.PHP.YodaConditions"/>
+		
+		<!-- Allow non-escaped output in some cases -->
+		<exclude name="WordPress.Security.EscapeOutput"/>
+	</rule>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<!-- Value: replace the function, class, and variable prefixes used. Separate multiple prefixes with a comma. -->
+		<properties>
+			<property name="prefixes" type="array" value="ss,SS"/>
+		</properties>
+	</rule>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array" value="ss-core-licenses"/>
+		</properties>
+	</rule>
+
+	<!-- Verify that everything in the global namespace is prefixed with a theme-specific prefix. -->
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound">
+		<severity>5</severity>
+		<type>error</type>
+		<message>Non-prefixed functions are not allowed. All functions should be prefixed with "ss" or "SS". Found: %s().</message>
+	</rule>
+
+	<!-- Set the minimum supported WordPress version. -->
+	<config name="minimum_supported_wp_version" value="5.8"/>
+
+	<!-- Allow for plugin-specific exceptions -->
+	<rule ref="WordPress.Security.NonceVerification">
+		<exclude-pattern>*/tests/*</exclude-pattern>
+	</rule>
+
+</ruleset>
+

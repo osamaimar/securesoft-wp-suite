@@ -1,0 +1,61 @@
+name: Deploy Plugin to WordPress.org
+
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  deploy:
+    name: Deploy to WordPress.org
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+
+      - name: Install SVN
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y subversion
+
+      - name: Checkout WordPress.org SVN
+        run: |
+          svn checkout https://plugins.svn.wordpress.org/ss-core-licenses svn
+
+      - name: Copy plugin files
+        run: |
+          rsync -av --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='tests' \
+            --exclude='.gitignore' \
+            --exclude='composer.json' \
+            --exclude='composer.lock' \
+            --exclude='phpcs.xml' \
+            --exclude='README.md' \
+            wp-content/plugins/ss-core-licenses/ svn/trunk/
+
+      - name: Create SVN tag
+        run: |
+          cd svn
+          VERSION=$(grep -oP "Version:\s*\K[0-9.]+" trunk/ss-core-licenses.php)
+          svn copy trunk/ tags/$VERSION/
+        env:
+          SVN_USERNAME: ${{ secrets.WP_ORG_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WP_ORG_PASSWORD }}
+
+      - name: Commit to SVN
+        run: |
+          cd svn
+          svn add --force .
+          svn commit -m "Deploy version ${{ github.event.release.tag_name }}"
+        env:
+          SVN_USERNAME: ${{ secrets.WP_ORG_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WP_ORG_PASSWORD }}
+

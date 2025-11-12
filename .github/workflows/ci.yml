@@ -1,0 +1,144 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - 'wp-content/plugins/ss-core-licenses/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - 'wp-content/plugins/ss-core-licenses/**'
+      - '.github/workflows/**'
+  release:
+    types: [ created ]
+
+jobs:
+  php-syntax-check:
+    name: PHP Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          coverage: none
+
+      - name: Check PHP syntax
+        run: |
+          find wp-content/plugins/ss-core-licenses -type f -name "*.php" -exec php -l {} \; | grep -v "No syntax errors"
+
+  wordpress-coding-standards:
+    name: WordPress Coding Standards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          coverage: none
+
+      - name: Install PHPCS
+        run: |
+          composer global require wp-coding-standards/wpcs:^3.0
+          composer global require phpcompatibility/phpcompatibility-wp:^2.1
+          phpcs --config-set installed_paths "$HOME/.composer/vendor/wp-coding-standards/wpcs,$HOME/.composer/vendor/phpcompatibility/phpcompatibility-wp"
+
+      - name: Run PHPCS
+        run: |
+          phpcs --standard=phpcs.xml wp-content/plugins/ss-core-licenses/ || true
+        continue-on-error: true
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run PHP Security Checker
+        uses: symfonycorp/security-checker-action@v4
+        with:
+          path: wp-content/plugins/ss-core-licenses
+
+      - name: Run WPScan (WordPress Security)
+        uses: wpscanteam/wpscan-action@master
+        with:
+          token: ${{ secrets.WPSCAN_API_TOKEN }}
+          url: https://example.com
+        continue-on-error: true
+
+  build-plugin:
+    name: Build Plugin Package
+    runs-on: ubuntu-latest
+    needs: [php-syntax-check]
+    if: github.event_name == 'push' || github.event_name == 'release'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get plugin version
+        id: plugin_version
+        run: |
+          VERSION=$(grep -oP "Version:\s*\K[0-9.]+" wp-content/plugins/ss-core-licenses/ss-core-licenses.php)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Plugin version: $VERSION"
+
+      - name: Create plugin package
+        run: |
+          mkdir -p dist
+          cd wp-content/plugins
+          zip -r ../../dist/ss-core-licenses-${{ steps.plugin_version.outputs.version }}.zip ss-core-licenses/ \
+            -x "*.git*" \
+            -x "*node_modules*" \
+            -x "*.DS_Store" \
+            -x "*tests/*" \
+            -x "*.md" \
+            -x "*.txt" \
+            -x "*.json" \
+            -x "*.lock"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ss-core-licenses-${{ steps.plugin_version.outputs.version }}
+          path: dist/ss-core-licenses-${{ steps.plugin_version.outputs.version }}.zip
+          retention-days: 30
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-plugin]
+    if: github.event_name == 'release'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get plugin version
+        id: plugin_version
+        run: |
+          VERSION=$(grep -oP "Version:\s*\K[0-9.]+" wp-content/plugins/ss-core-licenses/ss-core-licenses.php)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ss-core-licenses-${{ steps.plugin_version.outputs.version }}
+          path: dist/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

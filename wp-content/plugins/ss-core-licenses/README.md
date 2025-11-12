@@ -200,6 +200,35 @@ Run tests with PHPUnit:
 vendor/bin/phpunit
 ```
 
+### CI/CD
+
+The plugin includes automated CI/CD pipelines using GitHub Actions:
+
+- **Code Quality**: Automatic PHP syntax checking and WordPress coding standards
+- **Security Scanning**: Automated security vulnerability scanning
+- **Build Automation**: Automatic plugin package creation
+- **Deployment**: Automated deployment to WordPress.org (optional)
+
+See [CI_CD.md](CI_CD.md) for detailed documentation.
+
+**Local Development:**
+
+```bash
+# Install dependencies
+composer install
+
+# Run code quality checks
+composer run lint
+composer run phpcs
+
+# Auto-fix coding standards
+composer run phpcbf
+
+# Build plugin package
+./build.sh  # Linux/Mac
+build.bat   # Windows
+```
+
 ## Security
 
 - All license codes are encrypted using AES-256-GCM

@@ -1,0 +1,31 @@
+# Composer
+/vendor/
+composer.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+/dist/
+/build/
+*.zip
+
+# Tests
+/tests/
+phpunit.xml
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
