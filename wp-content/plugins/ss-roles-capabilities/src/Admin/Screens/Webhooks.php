@@ -7,10 +7,14 @@
 
 namespace SS_Roles_Capabilities\Admin\Screens;
 
+use SS_Roles_Capabilities\Traits\AuditLogger;
+
 /**
  * Webhooks configuration admin screen.
  */
 class Webhooks {
+
+	use AuditLogger;
 
 	/**
 	 * Option name used to store webhooks configuration.
@@ -302,6 +306,21 @@ class Webhooks {
 
 		update_option( self::OPTION_NAME, $webhooks );
 
+		// Log action.
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
+			'webhook_added',
+			'webhook',
+			$webhook_id,
+			array(
+				'event' => $event,
+				'url'   => $url,
+				'has_secret' => ! empty( $secret ),
+				'retry' => $retry,
+			)
+		);
+
 		wp_safe_redirect( admin_url( 'admin.php?page=ss-securesoft-webhooks&added=1' ) );
 		exit;
 	}
@@ -327,8 +346,22 @@ class Webhooks {
 
 		$webhooks = get_option( self::OPTION_NAME, array() );
 		if ( isset( $webhooks[ $webhook_id ] ) ) {
+			$webhook = $webhooks[ $webhook_id ];
 			unset( $webhooks[ $webhook_id ] );
 			update_option( self::OPTION_NAME, $webhooks );
+
+			// Log action.
+			$actor_id = get_current_user_id();
+			$this->log_audit_event(
+				$actor_id,
+				'webhook_deleted',
+				'webhook',
+				$webhook_id,
+				array(
+					'event' => isset( $webhook['event'] ) ? $webhook['event'] : '',
+					'url'   => isset( $webhook['url'] ) ? $webhook['url'] : '',
+				)
+			);
 		}
 
 		wp_safe_redirect( admin_url( 'admin.php?page=ss-securesoft-webhooks&deleted=1' ) );
@@ -389,6 +422,21 @@ class Webhooks {
 		);
 
 		$status = is_wp_error( $response ) ? 'error' : 'success';
+
+		// Log action.
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
+			'webhook_tested',
+			'webhook',
+			$webhook_id,
+			array(
+				'event'  => isset( $webhook['event'] ) ? $webhook['event'] : '',
+				'url'    => isset( $webhook['url'] ) ? $webhook['url'] : '',
+				'status' => $status,
+			)
+		);
+
 		wp_safe_redirect( admin_url( 'admin.php?page=ss-securesoft-webhooks&tested=1&status=' . $status ) );
 		exit;
 	}

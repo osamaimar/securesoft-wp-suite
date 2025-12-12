@@ -7,10 +7,14 @@
 
 namespace SS_Roles_Capabilities\Admin\Screens;
 
+use SS_Roles_Capabilities\Traits\AuditLogger;
+
 /**
  * Policy and defaults admin screen.
  */
 class Policy {
+
+	use AuditLogger;
 
 	/**
 	 * Constructor.
@@ -396,13 +400,17 @@ class Policy {
 			update_option( self::OPTION_TRANSITIONS, $sanitized );
 		}
 
-		// Optionally integrate with SecureSoft Core audit log if available.
-		do_action(
-			'ss/audit/log',
+		// Log to audit log.
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
 			'roles_policy_updated',
+			'policy',
+			null,
 			array(
 				'default_role'    => $default_role,
 				'approval_policy' => $policy,
+				'transitions_count' => count( $sanitized ),
 			)
 		);
 	}

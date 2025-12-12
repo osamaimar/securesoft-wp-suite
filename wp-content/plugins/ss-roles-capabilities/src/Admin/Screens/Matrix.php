@@ -8,11 +8,14 @@
 namespace SS_Roles_Capabilities\Admin\Screens;
 
 use SS_Roles_Capabilities\Roles\Registrar;
+use SS_Roles_Capabilities\Traits\AuditLogger;
 
 /**
  * Capability matrix admin screen.
  */
 class Matrix {
+
+	use AuditLogger;
 
 	/**
 	 * Roles registrar.
@@ -390,13 +393,19 @@ class Matrix {
 			$this->update_role_timestamps( $roles_to_update );
 
 			// Log action.
-			do_action(
-				'ss/audit/log',
-				'capabilities_updated',
-				array(
-					'roles' => $roles_to_update,
-				)
-			);
+			$actor_id = get_current_user_id();
+			foreach ( $roles_to_update as $role_key ) {
+				$this->log_audit_event(
+					$actor_id,
+					'capabilities_updated',
+					'capability',
+					null,
+					array(
+						'role' => $role_key,
+						'capabilities_count' => count( $paged_caps ),
+					)
+				);
+			}
 
 			// Redirect to prevent duplicate submissions and show success message.
 			$redirect_url = admin_url( 'admin.php?page=ss-securesoft-matrix' );
@@ -490,12 +499,16 @@ class Matrix {
 		// Update last updated timestamp.
 		$this->update_role_timestamps( $updated_roles );
 
-		// Log action.
-		do_action(
-			'ss/audit/log',
+		// Log action (single log entry for all roles).
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
 			'capabilities_reverted',
+			'capability',
+			null,
 			array(
 				'roles' => $updated_roles,
+				'roles_count' => count( $updated_roles ),
 			)
 		);
 

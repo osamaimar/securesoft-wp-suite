@@ -8,11 +8,14 @@
 namespace SS_Roles_Capabilities\Admin\Screens;
 
 use SS_Roles_Capabilities\Roles\Registrar;
+use SS_Roles_Capabilities\Traits\AuditLogger;
 
 /**
  * Roles list admin screen.
  */
 class Roles {
+
+	use AuditLogger;
 
 	/**
 	 * Roles registrar.
@@ -168,9 +171,12 @@ class Roles {
 		update_option( self::OPTION_LAST_UPDATED, $last_updated );
 
 		// Log action.
-		do_action(
-			'ss/audit/log',
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
 			'role_created',
+			'role',
+			$role_key,
 			array(
 				'role' => $role_key,
 				'name' => $role_name,
@@ -223,9 +229,12 @@ class Roles {
 		remove_role( $role );
 
 		// Log action.
-		do_action(
-			'ss/audit/log',
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
 			'role_deleted',
+			'role',
+			$role,
 			array(
 				'role' => $role,
 			)
@@ -281,9 +290,12 @@ class Roles {
 		add_role( $new_role_key, $new_name, $role_data['capabilities'] );
 
 		// Log action.
-		do_action(
-			'ss/audit/log',
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
 			'role_duplicated',
+			'role',
+			$new_role_key,
 			array(
 				'source_role' => $role,
 				'new_role'    => $new_role_key,
@@ -385,9 +397,12 @@ class Roles {
 		}
 
 		// Log action.
-		do_action(
-			'ss/audit/log',
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
 			'roles_imported',
+			'role',
+			null,
 			array(
 				'count' => $imported,
 			)

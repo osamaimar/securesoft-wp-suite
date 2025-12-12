@@ -8,6 +8,7 @@
 namespace SS_Roles_Capabilities\REST\Controllers;
 
 use SS_Roles_Capabilities\Roles\Registrar;
+use SS_Roles_Capabilities\Traits\AuditLogger;
 use WP_Error;
 use WP_REST_Controller;
 use WP_REST_Request;
@@ -18,6 +19,8 @@ use WP_User;
  * Users REST controller.
  */
 class Users extends WP_REST_Controller {
+
+	use AuditLogger;
 
 	/**
 	 * Namespace.
@@ -102,7 +105,22 @@ class Users extends WP_REST_Controller {
 			return new WP_Error( 'ss_users_role_not_found', __( 'Role not found.', 'ss-roles-capabilities' ), array( 'status' => 404 ) );
 		}
 
+		$old_roles = $user->roles;
 		$user->set_role( $new_role );
+
+		// Log action.
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
+			'user_role_changed',
+			'user',
+			$user_id,
+			array(
+				'old_roles' => $old_roles,
+				'new_role'  => $new_role,
+				'source'    => 'rest_api',
+			)
+		);
 
 		return new WP_REST_Response(
 			array(

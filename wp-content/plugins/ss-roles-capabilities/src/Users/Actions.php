@@ -63,6 +63,17 @@ class Actions {
 			'source' => 'wordpress_registration',
 		);
 
+		// Log to audit log.
+		$this->log_audit_event(
+			$user_id,
+			'user_registered',
+			$user_id,
+			array(
+				'role'    => $default_role,
+				'context' => $context,
+			)
+		);
+
 		/**
 		 * Fire SecureSoft user registered event.
 		 */
@@ -90,6 +101,24 @@ class Actions {
 	 * @return void
 	 */
 	public function handle_role_changed( $user_id, $role, $old_roles ) {
+		// Get actor user ID (who made the change).
+		$actor_id = get_current_user_id();
+		if ( ! $actor_id ) {
+			// If no current user, use system (0) or the user themselves if self-registration.
+			$actor_id = $user_id;
+		}
+
+		// Log to audit log.
+		$this->log_audit_event(
+			$actor_id,
+			'user_role_changed',
+			$user_id,
+			array(
+				'old_roles' => $old_roles,
+				'new_role'  => $role,
+			)
+		);
+
 		/**
 		 * Fire SecureSoft role changed event.
 		 */
@@ -264,8 +293,19 @@ class Actions {
 		switch ( $action ) {
 			case 'suspend':
 				if ( isset( $_GET['_wpnonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'ss_suspend_user_' . $user_id ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+					$actor_id = get_current_user_id();
 					update_user_meta( $user_id, 'ss_suspended', 1 );
 					$this->force_logout_user( $user_id );
+
+					// Log to audit log.
+					$this->log_audit_event(
+						$actor_id,
+						'user_suspended',
+						$user_id,
+						array(
+							'reason' => 'manual_admin_action',
+						)
+					);
 
 					$dispatcher = new Dispatcher();
 					do_action( 'ss/user/suspended', $user_id, 'manual_admin_action' );
@@ -285,7 +325,16 @@ class Actions {
 
 			case 'reactivate':
 				if ( isset( $_GET['_wpnonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'ss_reactivate_user_' . $user_id ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+					$actor_id = get_current_user_id();
 					update_user_meta( $user_id, 'ss_suspended', 0 );
+
+					// Log to audit log.
+					$this->log_audit_event(
+						$actor_id,
+						'user_reactivated',
+						$user_id,
+						array()
+					);
 
 					$dispatcher = new Dispatcher();
 					do_action( 'ss/user/reactivated', $user_id );
@@ -304,7 +353,8 @@ class Actions {
 
 			case 'force_logout':
 				if ( isset( $_GET['_wpnonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'ss_force_logout_' . $user_id ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-					$this->force_logout_user( $user_id );
+					$actor_id = get_current_user_id();
+					$this->force_logout_user( $user_id, $actor_id );
 					wp_safe_redirect( admin_url( 'user-edit.php?user_id=' . $user_id . '&ss_logged_out=1' ) );
 					exit;
 				}
@@ -315,10 +365,11 @@ class Actions {
 	/**
 	 * Force logout user by invalidating all sessions.
 	 *
-	 * @param int $user_id User ID.
+	 * @param int      $user_id User ID.
+	 * @param int|null $actor_id Actor user ID (who performed the action). Defaults to current user.
 	 * @return void
 	 */
-	protected function force_logout_user( $user_id ) {
+	protected function force_logout_user( $user_id, $actor_id = null ) {
 		// Invalidate all sessions by updating user meta.
 		update_user_meta( $user_id, 'session_tokens', array() );
 
@@ -327,13 +378,17 @@ class Actions {
 			wp_destroy_all_sessions();
 		}
 
-		// Log action.
-		do_action(
-			'ss/audit/log',
+		// Get actor ID if not provided.
+		if ( null === $actor_id ) {
+			$actor_id = get_current_user_id();
+		}
+
+		// Log to audit log.
+		$this->log_audit_event(
+			$actor_id,
 			'user_force_logged_out',
-			array(
-				'user_id' => $user_id,
-			)
+			$user_id,
+			array()
 		);
 	}
 
@@ -387,12 +442,23 @@ class Actions {
 		}
 
 		$is_suspended = isset( $_POST['ss_suspended'] ) ? 1 : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$actor_id = get_current_user_id();
 
 		update_user_meta( $user_id, 'ss_suspended', $is_suspended );
 
 		$dispatcher = new Dispatcher();
 
 		if ( 1 === $is_suspended ) {
+			// Log to audit log.
+			$this->log_audit_event(
+				$actor_id,
+				'user_suspended',
+				$user_id,
+				array(
+					'reason' => 'manual_admin_action',
+				)
+			);
+
 			do_action( 'ss/user/suspended', $user_id, 'manual_admin_action' );
 
 			$dispatcher->dispatch(
@@ -404,6 +470,14 @@ class Actions {
 				)
 			);
 		} else {
+			// Log to audit log.
+			$this->log_audit_event(
+				$actor_id,
+				'user_reactivated',
+				$user_id,
+				array()
+			);
+
 			do_action( 'ss/user/reactivated', $user_id );
 
 			$dispatcher->dispatch(
@@ -415,6 +489,48 @@ class Actions {
 			);
 		}
 	}
-}
 
+	/**
+	 * Get Core plugin audit logger instance.
+	 *
+	 * @return \SS_Core_Licenses\Audit\Logger|null Logger instance or null if Core is not available.
+	 */
+	protected function get_audit_logger() {
+		if ( ! class_exists( '\SS_Core_Licenses\Plugin' ) ) {
+			return null;
+		}
+
+		$core_plugin = \SS_Core_Licenses\Plugin::instance();
+		if ( ! $core_plugin || ! isset( $core_plugin->audit_logger ) ) {
+			return null;
+		}
+
+		return $core_plugin->audit_logger;
+	}
+
+	/**
+	 * Log an audit event via Core plugin.
+	 *
+	 * @param int    $actor_id   Actor user ID.
+	 * @param string $action     Action performed.
+	 * @param int    $entity_id  Entity ID (user ID in this case).
+	 * @param array  $meta       Additional metadata.
+	 * @return void
+	 */
+	protected function log_audit_event( $actor_id, $action, $entity_id, $meta = array() ) {
+		$logger = $this->get_audit_logger();
+		if ( ! $logger ) {
+			// Core plugin not available, skip logging.
+			return;
+		}
+
+		$logger->log(
+			$actor_id,
+			$action,
+			'user',
+			$entity_id,
+			$meta
+		);
+	}
+}
 

@@ -8,6 +8,7 @@
 namespace SS_Roles_Capabilities\REST\Controllers;
 
 use SS_Roles_Capabilities\Roles\Registrar;
+use SS_Roles_Capabilities\Traits\AuditLogger;
 use WP_Error;
 use WP_REST_Controller;
 use WP_REST_Request;
@@ -17,6 +18,8 @@ use WP_REST_Response;
  * Roles REST controller.
  */
 class Roles extends WP_REST_Controller {
+
+	use AuditLogger;
 
 	/**
 	 * Namespace.
@@ -166,6 +169,21 @@ class Roles extends WP_REST_Controller {
 
 		add_role( $role, $name, $caps_clean );
 
+		// Log action.
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
+			'role_created',
+			'role',
+			$role,
+			array(
+				'role' => $role,
+				'name' => $name,
+				'capabilities' => array_keys( $caps_clean ),
+				'source' => 'rest_api',
+			)
+		);
+
 		return $this->get_roles( $request );
 	}
 
@@ -202,6 +220,20 @@ class Roles extends WP_REST_Controller {
 			}
 		}
 
+		// Log action.
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
+			'role_capabilities_updated',
+			'capability',
+			null,
+			array(
+				'role' => $role_key,
+				'capabilities' => array_keys( $new_caps ),
+				'source' => 'rest_api',
+			)
+		);
+
 		return $this->get_roles( $request );
 	}
 
@@ -219,6 +251,19 @@ class Roles extends WP_REST_Controller {
 		}
 
 		remove_role( $role_key );
+
+		// Log action.
+		$actor_id = get_current_user_id();
+		$this->log_audit_event(
+			$actor_id,
+			'role_deleted',
+			'role',
+			$role_key,
+			array(
+				'role' => $role_key,
+				'source' => 'rest_api',
+			)
+		);
 
 		return $this->get_roles( $request );
 	}

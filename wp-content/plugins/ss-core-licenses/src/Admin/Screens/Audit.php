@@ -224,7 +224,7 @@ class Audit {
 									<?php if ( ! empty( $log['meta'] ) ) : ?>
 										<details>
 											<summary><?php esc_html_e( 'View Details', 'ss-core-licenses' ); ?></summary>
-											<pre class="code"><?php echo esc_html( wp_json_encode( $log['meta'], JSON_PRETTY_PRINT ) ); ?></pre>
+											<pre class="code"><?php echo esc_html( wp_json_encode( $log['meta'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) ); ?></pre>
 										</details>
 									<?php else : ?>
 										—
@@ -350,7 +350,7 @@ class Audit {
 					$log['entity_type'],
 					$log['entity_id'],
 					$log['ip'],
-					wp_json_encode( $log['meta'] ),
+					wp_json_encode( $log['meta'], JSON_UNESCAPED_SLASHES ),
 				)
 			);
 		}

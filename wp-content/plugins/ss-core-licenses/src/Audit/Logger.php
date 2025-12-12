@@ -42,7 +42,7 @@ class Logger {
 				'entity_id' => $entity_id,
 				'ip' => $ip,
 				'user_agent' => $user_agent,
-				'meta' => wp_json_encode( $meta ),
+				'meta' => wp_json_encode( $meta, JSON_UNESCAPED_SLASHES ),
 				'created_at' => current_time( 'mysql' ),
 			),
 			array( '%d', '%s', '%s', '%d', '%s', '%s', '%s', '%s' )
