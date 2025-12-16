@@ -144,10 +144,22 @@ class ProductMeta {
 	}
 
 	/**
-	 * Add product fields (legacy support).
+	 * Add product fields to General tab.
 	 */
 	public function add_product_fields() {
-		// Fields are now in the custom tab.
+		global $post;
+
+		woocommerce_wp_text_input(
+			array(
+				'id' => '_ss_product_cost',
+				'label' => __( 'Product Cost', 'ss-core-licenses' ) . ' (' . get_woocommerce_currency_symbol() . ')',
+				'value' => get_post_meta( $post->ID, '_ss_product_cost', true ),
+				'type' => 'text',
+				'data_type' => 'price',
+				'desc_tip' => true,
+				'description' => __( 'The cost price of this product (for profit calculation).', 'ss-core-licenses' ),
+			)
+		);
 	}
 
 	/**
@@ -179,6 +191,11 @@ class ProductMeta {
 		// Save license notes.
 		if ( isset( $_POST['_ss_license_notes'] ) ) {
 			update_post_meta( $post_id, '_ss_license_notes', sanitize_textarea_field( wp_unslash( $_POST['_ss_license_notes'] ) ) );
+		}
+
+		// Save product cost.
+		if ( isset( $_POST['_ss_product_cost'] ) ) {
+			update_post_meta( $post_id, '_ss_product_cost', wc_format_decimal( wp_unslash( $_POST['_ss_product_cost'] ) ) );
 		}
 
 		// Update license status based on available count.
